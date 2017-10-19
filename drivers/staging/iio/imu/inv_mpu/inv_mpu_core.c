@@ -2083,6 +2083,7 @@ static int inv_mpu_probe(struct i2c_client *client,
 	spin_lock_init(&st->time_stamp_lock);
 	dev_info(&client->dev, "%s is ready to go!\n",
 					indio_dev->name);
+	pr_debug("Invensense MPU probe complete.\n");
 
 	return 0;
 out_unreg_iio:
@@ -2112,6 +2113,7 @@ static void inv_mpu_shutdown(struct i2c_client *client)
 	int result;
 
 	reg = &st->reg;
+	mutex_lock(&indio_dev->mlock);
 	dev_dbg(&client->adapter->dev, "Shutting down %s...\n", st->hw->name);
 
 	/* reset to make sure previous state are not there */
@@ -2125,6 +2127,7 @@ static void inv_mpu_shutdown(struct i2c_client *client)
 	if (result)
 		dev_err(&client->adapter->dev, "Failed to turn off %s\n",
 			st->hw->name);
+	mutex_unlock(&indio_dev->mlock);
 }
 
 /**
