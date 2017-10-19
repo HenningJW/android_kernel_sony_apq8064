@@ -185,6 +185,8 @@ static int set_fifo_rate_reg(struct inv_mpu_iio_s *st)
 	result = inv_set_lpf(st, fifo_rate);
 	if (result)
 		return result;
+	/* wait for the sampling rate change to stabilize */
+	mdelay(INV_MPU_SAMPLE_RATE_CHANGE_STABLE);
 	st->chip_config.fifo_rate = fifo_rate;
 
 	return 0;
@@ -610,6 +612,7 @@ irqreturn_t inv_read_fifo_mpu3050(int irq, void *dev_id)
 	/* It is impossible that chip is asleep or enable is
 	zero when interrupt is on
 	*  because interrupt is now connected with enable */
+	mutex_lock(&indio_dev->mlock);
 	if (st->chip_config.dmp_on)
 		bytes_per_datum = BYTES_FOR_DMP;
 	else
@@ -672,12 +675,16 @@ irqreturn_t inv_read_fifo_mpu3050(int irq, void *dev_id)
 	}
 
 end_session:
+	mutex_unlock(&indio_dev->mlock);
+
 	return IRQ_HANDLED;
 
 flush_fifo:
 	/* Flush HW and SW FIFOs. */
 	inv_reset_fifo(indio_dev);
 	inv_clear_kfifo(st);
+	mutex_unlock(&indio_dev->mlock);
+
 	return IRQ_HANDLED;
 }
 
