@@ -1564,6 +1564,67 @@ static ssize_t lm3533_reset_store(struct device *dev,
 	return rc ? rc : count;
 }
 
+#define IS_BL_MAP_MODE_LIN(mode)				\
+	((mode & (LM3533_HVA_MAP_LIN | LM3533_HVB_MAP_LIN)) ==	\
+		(LM3533_HVA_MAP_LIN | LM3533_HVB_MAP_LIN))
+
+static ssize_t lm3533_bl_map_mode_store(struct device *dev,
+		struct device_attribute *dev_attr,
+		const char *buf, size_t count)
+{
+	struct lm3533_data *lm = dev_get_drvdata(dev);
+	enum { MODE_LIN, MODE_EXP } bl_map_mode;
+	int ret;
+	u8 mode;
+
+	if (sysfs_streq(buf, "lin"))
+		bl_map_mode = MODE_LIN;
+	else if (sysfs_streq(buf, "exp"))
+		bl_map_mode = MODE_EXP;
+	else
+		return -EINVAL;
+
+	ret = lm3533_read(lm, &mode, REG_HVBCTL);
+	if (ret) {
+		dev_err(dev, "%s: Read failed.\n", __func__);
+		return ret;
+	}
+
+	if (bl_map_mode == MODE_LIN)
+		mode |= (LM3533_HVA_MAP_LIN | LM3533_HVB_MAP_LIN);
+	else
+		mode &= (LM3533_HVA_MAP_EXP | LM3533_HVB_MAP_EXP);
+
+	ret = lm3533_write(lm, mode, REG_HVBCTL);
+	if (ret) {
+		dev_err(dev, "%s: Write failed.\n", __func__);
+		return ret;
+	}
+
+	dev_info(dev, "%s: %s mode set\n", __func__,
+			IS_BL_MAP_MODE_LIN(mode) ? "Linear" : "Exponential");
+
+	return count;
+}
+
+static ssize_t lm3533_bl_map_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct lm3533_data *lm = dev_get_drvdata(dev);
+	int ret;
+	u8 cur_mode;
+
+	ret = lm3533_read(lm, &cur_mode, REG_HVBCTL);
+	if (ret) {
+		dev_err(dev, "%s: Read failed.\n", __func__);
+		return ret;
+	}
+
+	return scnprintf(buf, PAGE_SIZE, IS_BL_MAP_MODE_LIN(cur_mode) ?
+					"lin\n" : "exp\n");
+
+}
+
 static const DEVICE_ATTR(reset, S_IWUSR, NULL, lm3533_reset_store);
 static const DEVICE_ATTR(als_current, S_IWUSR | S_IRUSR,
 		lm3533_als_current_show, lm3533_als_current_store);
@@ -1584,6 +1645,8 @@ static const DEVICE_ATTR(als1_curve, S_IWUSR, NULL, lm3533_als1_store);
 static const DEVICE_ATTR(als2_curve, S_IWUSR, NULL, lm3533_als2_store);
 static const DEVICE_ATTR(als3_curve, S_IWUSR, NULL, lm3533_als3_store);
 static const DEVICE_ATTR(sync_lvbanks, S_IWUSR, NULL, lm3533_lvbnak_sync_store);
+static const DEVICE_ATTR(bl_map_mode, S_IWUSR | S_IRUSR,
+		lm3533_bl_map_mode_show, lm3533_bl_map_mode_store);
 
 static const struct attribute *lm3533_attrs[] = {
 	&dev_attr_reset.attr,
@@ -1599,6 +1662,7 @@ static const struct attribute *lm3533_attrs[] = {
 	&dev_attr_rt_rate_ms.attr,
 	&dev_attr_start_shdn_ms.attr,
 	&dev_attr_sync_lvbanks.attr,
+	&dev_attr_bl_map_mode.attr,
 	NULL,
 };
 
